@@ -55,14 +55,14 @@ input ENUM_TIMEFRAMES InpTimeframe        = PERIOD_M5;  // Working timeframe
 input int            InpFastEmaPeriod      = 21;    // Fast EMA (pullback level)
 input int            InpSlowEmaPeriod      = 100;   // Slow EMA (trend filter)
 input int            InpRsiPeriod          = 14;    // RSI period
-input double         InpRsiBuyLevel        = 40.0;  // Buy when RSI rises back above this
-input double         InpRsiSellLevel       = 60.0;  // Sell when RSI falls back below this
-input int            InpPullbackPoints     = 150;   // Max distance price..fast EMA to allow entry (points)
+input double         InpRsiBuyLevel        = 45.0;  // Buy when RSI rises back above this
+input double         InpRsiSellLevel       = 55.0;  // Sell when RSI falls back below this
+input double         InpPullbackAtrMult    = 2.0;   // Max distance price->fast EMA to allow entry (x ATR)
 
 input group "=== Volatility / filters ==="
 input int            InpAtrPeriod          = 14;    // ATR period
-input int            InpMinAtrPoints       = 80;    // Skip if ATR below this (points, 0 = ignore)
-input int            InpMaxSpreadPoints    = 50;    // Max allowed spread (points, 0 = ignore)
+input int            InpMinAtrPoints       = 0;     // Skip if ATR below this (points, 0 = ignore)
+input double         InpMaxSpreadAtrPct    = 25.0;  // Max spread as % of ATR (0 = ignore)
 
 input group "=== Position sizing ==="
 input ENUM_SIZING_MODE InpSizingMode       = SIZE_RISK_PERCENT; // How to size trades
@@ -261,45 +261,60 @@ void EvaluateEntry()
       return;
    if(g_lastTradeTime > 0 && (TimeCurrent() - g_lastTradeTime) < InpMinSecondsBetween)
       return;
-   if(!SpreadOK())
-      return;
 
-   //--- Pull indicator values for the just-closed bar (shift 1) and the
-   //--- previous one (shift 2) so we can detect an RSI cross.
-   double fastEma[2], slowEma[2], rsi[2], atr[1];
+   //--- Pull indicator values for the just-closed bar and the previous one
+   //--- so we can detect an RSI cross. Arrays are set as time-series, so
+   //--- index 0 = most recent (shift 1) and index 1 = the bar before it.
+   double fastEma[], slowEma[], rsi[], atr[];
+   ArraySetAsSeries(fastEma, true);
+   ArraySetAsSeries(slowEma, true);
+   ArraySetAsSeries(rsi,     true);
+   ArraySetAsSeries(atr,     true);
+
    if(CopyBuffer(g_fastEmaHandle, 0, 1, 2, fastEma) < 2) return;
    if(CopyBuffer(g_slowEmaHandle, 0, 1, 2, slowEma) < 2) return;
    if(CopyBuffer(g_rsiHandle,     0, 1, 2, rsi)     < 2) return;
    if(CopyBuffer(g_atrHandle,     0, 1, 1, atr)     < 1) return;
 
-   double atrPoints = atr[0] / _Point;
-   if(InpMinAtrPoints > 0 && atrPoints < InpMinAtrPoints)
+   double atrNow   = atr[0];
+   double fastNow  = fastEma[0];
+   double slowNow  = slowEma[0];
+   double rsiNow   = rsi[0];        // last closed bar
+   double rsiPrev  = rsi[1];        // the bar before it
+
+   if(atrNow <= 0.0)
+      return;
+   if(InpMinAtrPoints > 0 && (atrNow / _Point) < InpMinAtrPoints)
+      return;
+   if(!SpreadOK(atrNow))
       return;
 
    double closePrice = iClose(_Symbol, InpTimeframe, 1);
    if(closePrice <= 0.0)
       return;
 
-   bool   trendUp   = (fastEma[0] > slowEma[0]) && (closePrice > slowEma[0]);
-   bool   trendDown = (fastEma[0] < slowEma[0]) && (closePrice < slowEma[0]);
+   bool   trendUp   = (fastNow > slowNow) && (closePrice > slowNow);
+   bool   trendDown = (fastNow < slowNow) && (closePrice < slowNow);
 
-   double distToFast = MathAbs(closePrice - fastEma[0]) / _Point;
-   bool   nearFast   = (distToFast <= InpPullbackPoints);
+   //--- How far price has pulled back from the fast EMA, measured in ATR so
+   //--- it is independent of the symbol's digits / point size.
+   double distToFast = MathAbs(closePrice - fastNow);
+   bool   nearFast   = (distToFast <= InpPullbackAtrMult * atrNow);
 
-   //--- Long: uptrend, price pulled back near the fast EMA, RSI turning up
-   //--- out of the buy zone.
+   //--- Long: uptrend, price near the fast EMA, RSI turning back UP through
+   //--- the buy level (momentum returning after a dip).
    bool buySignal  = trendUp   && nearFast &&
-                     rsi[1] < InpRsiBuyLevel && rsi[0] >= InpRsiBuyLevel;
+                     rsiPrev < InpRsiBuyLevel && rsiNow >= InpRsiBuyLevel;
 
-   //--- Short: downtrend, price pulled back near the fast EMA, RSI turning
-   //--- down out of the sell zone.
+   //--- Short: downtrend, price near the fast EMA, RSI turning back DOWN
+   //--- through the sell level.
    bool sellSignal = trendDown && nearFast &&
-                     rsi[1] > InpRsiSellLevel && rsi[0] <= InpRsiSellLevel;
+                     rsiPrev > InpRsiSellLevel && rsiNow <= InpRsiSellLevel;
 
    if(buySignal)
-      OpenTrade(ORDER_TYPE_BUY, atr[0]);
+      OpenTrade(ORDER_TYPE_BUY, atrNow);
    else if(sellSignal)
-      OpenTrade(ORDER_TYPE_SELL, atr[0]);
+      OpenTrade(ORDER_TYPE_SELL, atrNow);
   }
 
 //+------------------------------------------------------------------+
@@ -502,14 +517,14 @@ bool InSession()
   }
 
 //+------------------------------------------------------------------+
-//| Spread check                                                     |
+//| Spread check (relative to ATR, so it works on any gold symbol)   |
 //+------------------------------------------------------------------+
-bool SpreadOK()
+bool SpreadOK(const double atrValue)
   {
-   if(InpMaxSpreadPoints <= 0)
+   if(InpMaxSpreadAtrPct <= 0.0 || atrValue <= 0.0)
       return(true);
-   long spread = SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
-   return(spread <= InpMaxSpreadPoints);
+   double spreadPrice = (double)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD) * _Point;
+   return(spreadPrice <= atrValue * InpMaxSpreadAtrPct / 100.0);
   }
 
 //+------------------------------------------------------------------+
@@ -555,11 +570,11 @@ void UpdateDashboard()
       "Open positions: %d / %d\n"
       "Trades today: %d / %d\n"
       "Day P/L: %.2f%%\n"
-      "Spread: %d pts (max %d)",
+      "Spread: %d pts",
       _Symbol, EnumToString(InpTimeframe),
       state, CountOpenPositions(), InpMaxPositions,
       g_tradesToday, InpMaxTradesPerDay,
-      dayPct, (int)spread, InpMaxSpreadPoints);
+      dayPct, (int)spread);
    Comment(txt);
   }
 //+------------------------------------------------------------------+
