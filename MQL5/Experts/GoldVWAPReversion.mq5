@@ -76,7 +76,7 @@ input double         InpFixedLots          = 0.01;  // Lot size (fixed-lot mode)
 input double         InpRiskPercent        = 1.0;   // Risk per trade (% of equity)
 
 input group "=== Stops / exits ==="
-input double         InpAtrSLMult          = 1.2;   // Stop loss = ATR x this beyond entry
+input double         InpAtrSLMult          = 2.2;   // Stop loss = ATR x this beyond entry
 input double         InpMinRewardRisk      = 1.0;   // Skip setups below this reward:risk (target=VWAP)
 input bool           InpUseBreakEven       = false; // Move SL to break-even
 input double         InpBreakEvenAtr       = 1.0;   // Profit (x ATR) to trigger break-even
@@ -91,9 +91,9 @@ input int            InpMinSecondsBetween  = 120;   // Min seconds between entri
 
 input group "=== Session window ==="
 input bool           InpUseSession         = true;  // Restrict to the London/NY overlap
-input bool           InpSessionInUTC       = false; // Treat the hours below as UTC (convert via offset)
-input int            InpBrokerGmtOffset    = 2;     // Broker server time minus UTC (hours)
-input int            InpSessionStartHour   = 13;    // Session start hour
+input bool           InpSessionInUTC       = true;  // Treat the hours below as UTC (convert via offset)
+input int            InpBrokerGmtOffset    = 3;     // Broker server time minus UTC (hours) - VERIFY yours
+input int            InpSessionStartHour   = 13;    // Session start hour (13-17 UTC = London/NY overlap)
 input int            InpSessionEndHour     = 17;    // Session end hour
 
 input group "=== General ==="
