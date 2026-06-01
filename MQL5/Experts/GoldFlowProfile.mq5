@@ -77,11 +77,11 @@ input group "=== Stops / exits ==="
 input double         InpAtrSLMult          = 1.5;   // Stop loss = ATR x this
 input double         InpAtrTPMult          = 2.0;   // Take profit = ATR x this (fallback)
 input bool           InpTargetPOC          = true;  // Take profit at the POC when it is beyond entry
-input double         InpMinRewardRisk      = 1.0;   // Skip setups below this reward:risk ratio
-input bool           InpUseBreakEven       = true;  // Move SL to break-even
+input double         InpMinRewardRisk      = 0.0;   // Skip setups below this reward:risk ratio (0 = off)
+input bool           InpUseBreakEven       = false; // Move SL to break-even
 input double         InpBreakEvenAtr       = 1.0;   // Profit (x ATR) to trigger break-even
 input double         InpBreakEvenLockAtr   = 0.1;   // Profit locked in at break-even (x ATR)
-input bool           InpUseTrailing        = true;  // Use trailing stop
+input bool           InpUseTrailing        = false; // Use trailing stop (off: mean-reversion lets TP work)
 input double         InpTrailStartAtr      = 1.2;   // Profit (x ATR) before trailing starts
 input double         InpTrailStepAtr       = 1.0;   // Trailing distance (x ATR)
 
