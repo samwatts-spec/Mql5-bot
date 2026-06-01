@@ -89,10 +89,12 @@ input double         InpDailyLossLimit     = 4.0;   // Stop for the day after lo
 input double         InpDailyProfitTarget  = 0.0;   // Stop for the day after gaining this % (0 = off)
 input int            InpMinSecondsBetween  = 120;   // Min seconds between entries
 
-input group "=== Session window (server time) ==="
+input group "=== Session window ==="
 input bool           InpUseSession         = true;  // Restrict to the London/NY overlap
-input int            InpSessionStartHour   = 13;    // Start hour - set to your broker's 13:00 UTC
-input int            InpSessionEndHour     = 17;    // End hour   - set to your broker's 17:00 UTC
+input bool           InpSessionInUTC       = false; // Treat the hours below as UTC (convert via offset)
+input int            InpBrokerGmtOffset    = 2;     // Broker server time minus UTC (hours)
+input int            InpSessionStartHour   = 13;    // Session start hour
+input int            InpSessionEndHour     = 17;    // Session end hour
 
 input group "=== General ==="
 input long           InpMagicNumber        = 20240603; // Magic number
@@ -541,18 +543,33 @@ int CountOpenPositions()
   }
 
 //+------------------------------------------------------------------+
+//| Convert a configured hour into the broker's server hour.         |
+//| When the hours are entered in UTC, server hour = UTC + offset.   |
+//+------------------------------------------------------------------+
+int ServerHour(const int configuredHour)
+  {
+   if(!InpSessionInUTC)
+      return(configuredHour);          // already broker server time
+   int h = (configuredHour + InpBrokerGmtOffset) % 24;
+   if(h < 0) h += 24;
+   return(h);
+  }
+
+//+------------------------------------------------------------------+
 //| True while the clock is inside the trading session window        |
 //+------------------------------------------------------------------+
 bool InSession()
   {
    MqlDateTime st;
    TimeToStruct(TimeCurrent(), st);
-   int hour = st.hour;
-   if(InpSessionStartHour == InpSessionEndHour)
+   int hour  = st.hour;
+   int start = ServerHour(InpSessionStartHour);
+   int end   = ServerHour(InpSessionEndHour);
+   if(start == end)
       return(true);
-   if(InpSessionStartHour < InpSessionEndHour)
-      return(hour >= InpSessionStartHour && hour < InpSessionEndHour);
-   return(hour >= InpSessionStartHour || hour < InpSessionEndHour);
+   if(start < end)
+      return(hour >= start && hour < end);
+   return(hour >= start || hour < end);
   }
 
 //+------------------------------------------------------------------+
@@ -625,10 +642,12 @@ void UpdateDashboard()
    string txt = StringFormat(
       "GoldVWAPReversion  [%s %s]\n"
       "State: %s\n"
+      "Session (server): %02d:00-%02d:00\n"
       "VWAP: %.*f   Bands: %.*f / %.*f  (SD %.*f)\n"
       "Open: %d/%d   Trades today: %d/%d\n"
       "Day P/L: %.2f%%",
       _Symbol, EnumToString(InpTimeframe), state,
+      ServerHour(InpSessionStartHour), ServerHour(InpSessionEndHour),
       _Digits, g_vwap, _Digits, g_lower, _Digits, g_upper, _Digits, g_sd,
       CountOpenPositions(), InpMaxPositions, g_tradesToday, InpMaxTradesPerDay,
       dayPct);
