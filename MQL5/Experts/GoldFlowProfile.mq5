@@ -77,12 +77,13 @@ input group "=== Stops / exits ==="
 input double         InpAtrSLMult          = 1.5;   // Stop loss = ATR x this
 input double         InpAtrTPMult          = 2.0;   // Take profit = ATR x this (fallback)
 input bool           InpTargetPOC          = true;  // Take profit at the POC when it is beyond entry
+input double         InpMinRewardRisk      = 1.0;   // Skip setups below this reward:risk ratio
 input bool           InpUseBreakEven       = true;  // Move SL to break-even
-input int            InpBreakEvenPoints    = 150;   // Profit (points) to trigger break-even
-input int            InpBreakEvenLock      = 20;    // Points locked in at break-even
+input double         InpBreakEvenAtr       = 1.0;   // Profit (x ATR) to trigger break-even
+input double         InpBreakEvenLockAtr   = 0.1;   // Profit locked in at break-even (x ATR)
 input bool           InpUseTrailing        = true;  // Use trailing stop
-input int            InpTrailStartPoints   = 200;   // Profit (points) before trailing starts
-input int            InpTrailStepPoints    = 120;   // Trailing distance (points)
+input double         InpTrailStartAtr      = 1.2;   // Profit (x ATR) before trailing starts
+input double         InpTrailStepAtr       = 1.0;   // Trailing distance (x ATR)
 
 input group "=== Trade control / risk caps ==="
 input int            InpMaxPositions       = 1;     // Max concurrent positions (this EA)
@@ -459,6 +460,18 @@ void OpenTrade(const ENUM_ORDER_TYPE type, const double atrValue)
            : NormalizeDouble(price - tpDist, _Digits);
      }
 
+   //--- Only take setups with an acceptable reward:risk. With a high win
+   //--- rate this is what keeps the average win >= the average loss.
+   double risk   = MathAbs(price - sl);
+   double reward = MathAbs(tp - price);
+   if(risk <= 0.0 || reward < InpMinRewardRisk * risk)
+     {
+      PrintFormat("Skipped %s: reward:risk %.2f below minimum %.2f",
+                  (type == ORDER_TYPE_BUY ? "BUY" : "SELL"),
+                  (risk > 0.0 ? reward / risk : 0.0), InpMinRewardRisk);
+      return;
+     }
+
    double lots = CalcLots(slDist);
    if(lots <= 0.0)
      {
@@ -515,6 +528,21 @@ void ManageOpenPositions()
    if(!InpUseBreakEven && !InpUseTrailing)
       return;
 
+   //--- ATR-based exits, so break-even / trailing scale with volatility
+   //--- and are independent of the symbol's digits.
+   double atr[];
+   ArraySetAsSeries(atr, true);
+   if(CopyBuffer(g_atrHandle, 0, 0, 1, atr) < 1)
+      return;
+   double atrNow = atr[0];
+   if(atrNow <= 0.0)
+      return;
+
+   double beTrigger = InpBreakEvenAtr     * atrNow;
+   double beLock    = InpBreakEvenLockAtr * atrNow;
+   double trailStart = InpTrailStartAtr   * atrNow;
+   double trailStep  = InpTrailStepAtr    * atrNow;
+
    for(int i = PositionsTotal() - 1; i >= 0; i--)
      {
       ulong ticket = PositionGetTicket(i);
@@ -535,15 +563,15 @@ void ManageOpenPositions()
 
       if(type == POSITION_TYPE_BUY)
         {
-         double profitPts = (bid - openPrice) / _Point;
-         if(InpUseBreakEven && profitPts >= InpBreakEvenPoints)
+         double profit = bid - openPrice;
+         if(InpUseBreakEven && profit >= beTrigger)
            {
-            double be = NormalizeDouble(openPrice + InpBreakEvenLock * _Point, _Digits);
+            double be = NormalizeDouble(openPrice + beLock, _Digits);
             if(be > newSL) newSL = be;
            }
-         if(InpUseTrailing && profitPts >= InpTrailStartPoints)
+         if(InpUseTrailing && profit >= trailStart)
            {
-            double trail = NormalizeDouble(bid - InpTrailStepPoints * _Point, _Digits);
+            double trail = NormalizeDouble(bid - trailStep, _Digits);
             if(trail > newSL) newSL = trail;
            }
          if(newSL > curSL && newSL < bid)
@@ -551,15 +579,15 @@ void ManageOpenPositions()
         }
       else if(type == POSITION_TYPE_SELL)
         {
-         double profitPts = (openPrice - ask) / _Point;
-         if(InpUseBreakEven && profitPts >= InpBreakEvenPoints)
+         double profit = openPrice - ask;
+         if(InpUseBreakEven && profit >= beTrigger)
            {
-            double be = NormalizeDouble(openPrice - InpBreakEvenLock * _Point, _Digits);
+            double be = NormalizeDouble(openPrice - beLock, _Digits);
             if(curSL == 0.0 || be < newSL) newSL = be;
            }
-         if(InpUseTrailing && profitPts >= InpTrailStartPoints)
+         if(InpUseTrailing && profit >= trailStart)
            {
-            double trail = NormalizeDouble(ask + InpTrailStepPoints * _Point, _Digits);
+            double trail = NormalizeDouble(ask + trailStep, _Digits);
             if(curSL == 0.0 || trail < newSL) newSL = trail;
            }
          if(newSL != curSL && (curSL == 0.0 || newSL < curSL) && newSL > ask)
