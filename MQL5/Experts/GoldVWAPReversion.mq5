@@ -65,6 +65,11 @@ input group "=== Trend filter (optional) ==="
 input bool           InpUseTrendFilter     = false; // Only trade with the EMA trend
 input int            InpTrendEmaPeriod      = 200;   // Trend EMA period
 
+input group "=== Ranging-regime filter (optional) ==="
+input bool           InpUseRegimeFilter    = false; // Only fade when the market is ranging
+input int            InpAdxPeriod          = 14;    // ADX period
+input double         InpAdxMax             = 25.0;  // Skip when ADX above this (too trendy)
+
 input group "=== Volatility ==="
 input int            InpAtrPeriod          = 14;    // ATR period
 input int            InpMinAtrPoints       = 0;     // Skip if ATR below this (points, 0 = ignore)
@@ -76,7 +81,7 @@ input double         InpFixedLots          = 0.01;  // Lot size (fixed-lot mode)
 input double         InpRiskPercent        = 1.0;   // Risk per trade (% of equity)
 
 input group "=== Stops / exits ==="
-input double         InpAtrSLMult          = 2.2;   // Stop loss = ATR x this beyond entry
+input double         InpAtrSLMult          = 1.2;   // Stop loss = ATR x this beyond entry
 input double         InpMinRewardRisk      = 1.0;   // Skip setups below this reward:risk (target=VWAP)
 input bool           InpUseBreakEven       = false; // Move SL to break-even
 input double         InpBreakEvenAtr       = 1.0;   // Profit (x ATR) to trigger break-even
@@ -91,9 +96,9 @@ input int            InpMinSecondsBetween  = 120;   // Min seconds between entri
 
 input group "=== Session window ==="
 input bool           InpUseSession         = true;  // Restrict to the London/NY overlap
-input bool           InpSessionInUTC       = true;  // Treat the hours below as UTC (convert via offset)
+input bool           InpSessionInUTC       = false; // Treat the hours below as UTC (convert via offset)
 input int            InpBrokerGmtOffset    = 3;     // Broker server time minus UTC (hours) - VERIFY yours
-input int            InpSessionStartHour   = 13;    // Session start hour (13-17 UTC = London/NY overlap)
+input int            InpSessionStartHour   = 13;    // Session start hour
 input int            InpSessionEndHour     = 17;    // Session end hour
 
 input group "=== General ==="
@@ -109,6 +114,7 @@ CPositionInfo posInfo;
 int      g_atrHandle = INVALID_HANDLE;
 int      g_rsiHandle = INVALID_HANDLE;
 int      g_emaHandle = INVALID_HANDLE;
+int      g_adxHandle = INVALID_HANDLE;
 
 datetime g_lastBarTime   = 0;
 datetime g_currentDay    = 0;
@@ -158,10 +164,13 @@ int OnInit()
       g_rsiHandle = iRSI(_Symbol, InpTimeframe, InpRsiPeriod, PRICE_CLOSE);
    if(InpUseTrendFilter)
       g_emaHandle = iMA(_Symbol, InpTimeframe, InpTrendEmaPeriod, 0, MODE_EMA, PRICE_CLOSE);
+   if(InpUseRegimeFilter)
+      g_adxHandle = iADX(_Symbol, InpTimeframe, InpAdxPeriod);
 
    if(g_atrHandle == INVALID_HANDLE ||
-      (InpUseRsiFilter   && g_rsiHandle == INVALID_HANDLE) ||
-      (InpUseTrendFilter && g_emaHandle == INVALID_HANDLE))
+      (InpUseRsiFilter    && g_rsiHandle == INVALID_HANDLE) ||
+      (InpUseTrendFilter  && g_emaHandle == INVALID_HANDLE) ||
+      (InpUseRegimeFilter && g_adxHandle == INVALID_HANDLE))
      {
       Print("Failed to create indicator handles.");
       return(INIT_FAILED);
@@ -182,6 +191,7 @@ void OnDeinit(const int reason)
    if(g_atrHandle != INVALID_HANDLE) IndicatorRelease(g_atrHandle);
    if(g_rsiHandle != INVALID_HANDLE) IndicatorRelease(g_rsiHandle);
    if(g_emaHandle != INVALID_HANDLE) IndicatorRelease(g_emaHandle);
+   if(g_adxHandle != INVALID_HANDLE) IndicatorRelease(g_adxHandle);
    ObjectDelete(0, OBJ_VWAP);
    ObjectDelete(0, OBJ_UP);
    ObjectDelete(0, OBJ_DN);
@@ -336,6 +346,18 @@ void EvaluateEntry()
       return;
    if(!SpreadOK(atrNow))
       return;
+
+   //--- Ranging-regime filter: mean-reversion fading is unsafe in strong
+   //--- trends, so optionally skip when ADX says the market is trending.
+   if(InpUseRegimeFilter)
+     {
+      double adx[];
+      ArraySetAsSeries(adx, true);
+      if(CopyBuffer(g_adxHandle, 0, 1, 1, adx) < 1)
+         return;
+      if(adx[0] > InpAdxMax)
+         return;
+     }
 
    //--- Signal bar = last closed bar (shift 1).
    double sigHigh  = iHigh(_Symbol,  InpTimeframe, 1);
