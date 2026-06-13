@@ -1,0 +1,42 @@
+; GoldVWAPReversion - baseline preset (the Run-4 winning configuration)
+; Load this in the Strategy Tester (Inputs tab -> Load) so the test uses
+; these exact values instead of whatever the tester last remembered.
+InpTimeframe=5
+InpAnchorHour=0
+InpBandMult=2.0
+InpRequireCloseBack=true
+InpMinSessionBars=12
+InpUseRealVolume=false
+InpShowLevels=true
+InpUseRsiFilter=true
+InpRsiPeriod=2
+InpRsiBuyLevel=10.0
+InpRsiSellLevel=90.0
+InpUseTrendFilter=false
+InpTrendEmaPeriod=200
+InpUseRegimeFilter=false
+InpAdxPeriod=14
+InpAdxMax=25.0
+InpAtrPeriod=14
+InpMinAtrPoints=0
+InpMaxSpreadAtrPct=20.0
+InpSizingMode=1
+InpFixedLots=0.01
+InpRiskPercent=1.0
+InpAtrSLMult=1.2
+InpMinRewardRisk=1.0
+InpUseBreakEven=false
+InpBreakEvenAtr=1.0
+InpBreakEvenLockAtr=0.1
+InpMaxPositions=1
+InpMaxTradesPerDay=4
+InpDailyLossLimit=4.0
+InpDailyProfitTarget=0.0
+InpMinSecondsBetween=120
+InpUseSession=true
+InpSessionInUTC=false
+InpBrokerGmtOffset=3
+InpSessionStartHour=13
+InpSessionEndHour=17
+InpMagicNumber=20240603
+InpComment=GoldVWAPReversion
