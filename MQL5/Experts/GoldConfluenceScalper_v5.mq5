@@ -23,9 +23,9 @@
 //|   Manages only its own orders (by magic number). Server time.    |
 //+------------------------------------------------------------------+
 #property copyright "Sam Watts"
-#property version   "4.00"
+#property version   "5.00"
 #property strict
-#property description "v4: confluence + HTF trend + ADX + session, symmetric 1:1 reward:risk."
+#property description "v5: confluence (optionally reversed/faded) + HTF trend + ADX + session, 1:1."
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -42,6 +42,7 @@ input double         InpEmergencyLossUSD   = 100.0; // Close if floating loss re
 
 input group "=== Confluence trigger ==="
 input int            InpMinConfirmations   = 3;     // Min indicators that must agree to enter
+input bool           InpReverseSignals     = true;  // FADE the confluence (gold M1 mean-reverts)
 input bool           InpUseEma             = true;  // 1) EMA trend (fast vs slow)
 input int            InpFastEmaPeriod      = 20;    // Fast EMA
 input int            InpSlowEmaPeriod      = 50;    // Slow EMA
@@ -326,6 +327,13 @@ void EvaluateEntry()
         }
      }
 
+   //--- Optionally FADE the confluence (gold M1 tends to mean-revert): a
+   //--- momentum signal that is anti-predictive becomes an edge when flipped.
+   if(InpReverseSignals)
+     {
+      int tmp = buyVotes; buyVotes = sellVotes; sellVotes = tmp;
+     }
+
    //--- Higher-timeframe trend gate: only allow trades WITH the HTF trend.
    bool htfAllowsBuy = true, htfAllowsSell = true;
    if(InpUseHtfTrend)
@@ -500,7 +508,7 @@ void UpdateDashboard()
                   : (InpUseSession && !InSession()) ? "outside session" : "active";
 
    string txt = StringFormat(
-      "GoldConfluenceScalper v4  [%s %s]\n"
+      "GoldConfluenceScalper v5  [%s %s]\n"
       "State: %s\n"
       "Target: +$%.2f   Stop loss: %s\n"
       "Confirmations needed: %d\n"
