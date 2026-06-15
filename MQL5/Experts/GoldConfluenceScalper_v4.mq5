@@ -23,9 +23,9 @@
 //|   Manages only its own orders (by magic number). Server time.    |
 //+------------------------------------------------------------------+
 #property copyright "Sam Watts"
-#property version   "3.00"
+#property version   "4.00"
 #property strict
-#property description "v3: 1-min confluence scalper + HTF trend gate + ADX chop gate + session + $ stop."
+#property description "v4: confluence + HTF trend + ADX + session, symmetric 1:1 reward:risk."
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -35,8 +35,8 @@
 //+------------------------------------------------------------------+
 input group "=== Exit (money based) ==="
 input ENUM_TIMEFRAMES InpTimeframe        = PERIOD_M1;  // Working timeframe
-input double         InpProfitTargetUSD    = 10.0;  // Close the trade at this floating profit ($)
-input double         InpStopLossUSD        = 20.0;  // Hard stop loss per trade ($, 0 = NO stop loss)
+input double         InpProfitTargetUSD    = 15.0;  // Close the trade at this floating profit ($)
+input double         InpStopLossUSD        = 15.0;  // Hard stop loss per trade ($, 0 = NO stop loss)
 input bool           InpUseEmergencyStop   = false; // OPTIONAL extra catastrophe money-stop
 input double         InpEmergencyLossUSD   = 100.0; // Close if floating loss reaches this ($)
 
@@ -500,7 +500,7 @@ void UpdateDashboard()
                   : (InpUseSession && !InSession()) ? "outside session" : "active";
 
    string txt = StringFormat(
-      "GoldConfluenceScalper v3  [%s %s]\n"
+      "GoldConfluenceScalper v4  [%s %s]\n"
       "State: %s\n"
       "Target: +$%.2f   Stop loss: %s\n"
       "Confirmations needed: %d\n"
