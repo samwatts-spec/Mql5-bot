@@ -2,6 +2,7 @@
 ; (Inputs -> Load). 1-min, +$10 money target, no stop loss, 3 confirmations.
 InpTimeframe=1
 InpProfitTargetUSD=10.0
+InpStopLossUSD=20.0
 InpUseEmergencyStop=false
 InpEmergencyLossUSD=100.0
 InpMinConfirmations=3

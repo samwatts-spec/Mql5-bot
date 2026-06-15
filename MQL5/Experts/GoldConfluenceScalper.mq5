@@ -36,7 +36,8 @@
 input group "=== Exit (money based) ==="
 input ENUM_TIMEFRAMES InpTimeframe        = PERIOD_M1;  // Working timeframe
 input double         InpProfitTargetUSD    = 10.0;  // Close the trade at this floating profit ($)
-input bool           InpUseEmergencyStop   = false; // OPTIONAL catastrophe money-stop
+input double         InpStopLossUSD        = 20.0;  // Hard stop loss per trade ($, 0 = NO stop loss)
+input bool           InpUseEmergencyStop   = false; // OPTIONAL extra catastrophe money-stop
 input double         InpEmergencyLossUSD   = 100.0; // Close if floating loss reaches this ($)
 
 input group "=== Confluence trigger ==="
@@ -330,20 +331,45 @@ void OpenTrade(const ENUM_ORDER_TYPE type, const int forVotes, const int against
                   : SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double lots = NormalizeLots(InpLots);
 
+   //--- Convert the dollar stop into a price-distance stop on the order.
+   double sl = 0.0;
+   if(InpStopLossUSD > 0.0)
+     {
+      double d = MoneyToDistance(lots, InpStopLossUSD);
+      double minStop = (double)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) * _Point;
+      if(d > 0.0 && d < minStop) d = minStop;
+      if(d > 0.0)
+         sl = (type == ORDER_TYPE_BUY)
+              ? NormalizeDouble(price - d, _Digits)
+              : NormalizeDouble(price + d, _Digits);
+     }
+
    bool ok = (type == ORDER_TYPE_BUY)
-             ? trade.Buy(lots, _Symbol, price, 0.0, 0.0, InpComment)
-             : trade.Sell(lots, _Symbol, price, 0.0, 0.0, InpComment);
+             ? trade.Buy(lots, _Symbol, price, sl, 0.0, InpComment)
+             : trade.Sell(lots, _Symbol, price, sl, 0.0, InpComment);
 
    if(ok)
      {
       g_lastTradeTime = TimeCurrent();
-      PrintFormat("%s %.2f lots @ %.*f  | confluence %d vs %d (need %d)",
+      PrintFormat("%s %.2f lots @ %.*f  SL %.*f  | confluence %d vs %d (need %d)",
                   (type == ORDER_TYPE_BUY ? "BUY" : "SELL"), lots, _Digits, price,
-                  forVotes, againstVotes, InpMinConfirmations);
+                  _Digits, sl, forVotes, againstVotes, InpMinConfirmations);
      }
    else
       PrintFormat("Order failed: %d - %s",
                   trade.ResultRetcode(), trade.ResultRetcodeDescription());
+  }
+
+//+------------------------------------------------------------------+
+//| Price distance whose money value equals 'money' for 'lots' lots  |
+//+------------------------------------------------------------------+
+double MoneyToDistance(const double lots, const double money)
+  {
+   double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+   double tickSize  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+   if(lots <= 0.0 || tickValue <= 0.0 || tickSize <= 0.0)
+      return(0.0);
+   return(money * tickSize / (lots * tickValue));
   }
 
 //+------------------------------------------------------------------+
@@ -456,7 +482,8 @@ void UpdateDashboard()
       "Confirmations needed: %d\n"
       "Open: %d/%d   Floating: $%.2f",
       _Symbol, EnumToString(InpTimeframe), state,
-      InpProfitTargetUSD, (InpUseEmergencyStop ? StringFormat("emergency $-%.0f", MathAbs(InpEmergencyLossUSD)) : "NONE"),
+      InpProfitTargetUSD, (InpStopLossUSD > 0.0 ? StringFormat("$-%.0f", InpStopLossUSD)
+                           : (InpUseEmergencyStop ? StringFormat("emergency $-%.0f", MathAbs(InpEmergencyLossUSD)) : "NONE")),
       InpMinConfirmations, openCount, InpMaxPositions, openMoney);
    Comment(txt);
   }
