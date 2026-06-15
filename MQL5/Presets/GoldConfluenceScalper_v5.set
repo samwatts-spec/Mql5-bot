@@ -1,12 +1,13 @@
-; GoldConfluenceScalper v4 preset. Load in the Strategy Tester
+; GoldConfluenceScalper v5 preset. Load in the Strategy Tester
 ; (Inputs -> Load). 1-min, symmetric +$15/-$15 (1:1), 3 confirmations,
-; HTF(H1) trend gate + ADX chop gate + London/NY session.
+; SIGNALS REVERSED (fade), HTF(H1) trend gate + ADX chop gate + London/NY.
 InpTimeframe=1
 InpProfitTargetUSD=15.0
 InpStopLossUSD=15.0
 InpUseEmergencyStop=false
 InpEmergencyLossUSD=100.0
 InpMinConfirmations=3
+InpReverseSignals=true
 InpUseEma=true
 InpFastEmaPeriod=20
 InpSlowEmaPeriod=50
