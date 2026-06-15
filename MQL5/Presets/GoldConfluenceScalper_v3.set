@@ -1,4 +1,4 @@
-; GoldConfluenceScalper - v2 baseline preset. Load in the Strategy Tester
+; GoldConfluenceScalper v3 preset. Load in the Strategy Tester
 ; (Inputs -> Load). 1-min, +$10 target, $20 stop, 3 confirmations,
 ; HTF(H1) trend gate + ADX chop gate + London/NY session.
 InpTimeframe=1

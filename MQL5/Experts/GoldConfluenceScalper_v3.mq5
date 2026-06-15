@@ -23,9 +23,9 @@
 //|   Manages only its own orders (by magic number). Server time.    |
 //+------------------------------------------------------------------+
 #property copyright "Sam Watts"
-#property version   "1.00"
+#property version   "3.00"
 #property strict
-#property description "1-minute multi-indicator confluence scalper with a fixed money target, no stop loss."
+#property description "v3: 1-min confluence scalper + HTF trend gate + ADX chop gate + session + $ stop."
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -500,7 +500,7 @@ void UpdateDashboard()
                   : (InpUseSession && !InSession()) ? "outside session" : "active";
 
    string txt = StringFormat(
-      "GoldConfluenceScalper  [%s %s]\n"
+      "GoldConfluenceScalper v3  [%s %s]\n"
       "State: %s\n"
       "Target: +$%.2f   Stop loss: %s\n"
       "Confirmations needed: %d\n"
