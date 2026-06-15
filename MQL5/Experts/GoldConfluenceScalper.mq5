@@ -54,6 +54,12 @@ input int            InpBandsPeriod        = 20;    // Bollinger period
 input bool           InpUseAdx             = true;  // 6) ADX +DI vs -DI (needs ADX >= min)
 input int            InpAdxPeriod          = 14;    // ADX period
 input double         InpAdxMin             = 20.0;  // ADX must be at least this to vote
+input bool           InpAdxGate            = true;  // Require ADX >= min to trade at all (skip chop)
+
+input group "=== Higher-timeframe trend filter ==="
+input bool           InpUseHtfTrend        = true;  // Only trade WITH the higher-TF trend
+input ENUM_TIMEFRAMES InpHtfTimeframe      = PERIOD_H1; // Higher timeframe for the trend
+input int            InpHtfMaPeriod        = 200;   // Higher-TF EMA period
 
 input group "=== Position / sizing ==="
 input double         InpLots               = 0.10;  // Fixed lot size
@@ -65,11 +71,11 @@ input group "=== Optional safety ==="
 input double         InpDailyLossLimit     = 0.0;   // Halt for the day after losing this % (0 = off)
 
 input group "=== Session window ==="
-input bool           InpUseSession         = false; // Restrict to a window (off = all day)
+input bool           InpUseSession         = true;  // Restrict to London/NY (skip Asian chop)
 input bool           InpSessionInUTC       = false; // Treat the hours below as UTC (convert via offset)
 input int            InpBrokerGmtOffset    = 3;     // Broker server time minus UTC (hours)
-input int            InpSessionStartHour   = 0;     // Session start hour
-input int            InpSessionEndHour     = 23;    // Session end hour
+input int            InpSessionStartHour   = 8;     // Session start hour (London onward)
+input int            InpSessionEndHour     = 21;    // Session end hour (NY close)
 
 input group "=== General ==="
 input long           InpMagicNumber        = 20240606; // Magic number
@@ -88,6 +94,7 @@ int      g_macdH    = INVALID_HANDLE;
 int      g_stochH   = INVALID_HANDLE;
 int      g_bandsH   = INVALID_HANDLE;
 int      g_adxH     = INVALID_HANDLE;
+int      g_htfH     = INVALID_HANDLE;
 
 datetime g_lastBarTime   = 0;
 datetime g_currentDay    = 0;
@@ -135,13 +142,15 @@ int OnInit()
    if(InpUseStoch) g_stochH = iStochastic(_Symbol, InpTimeframe, 5, 3, 3, MODE_SMA, STO_LOWHIGH);
    if(InpUseBands) g_bandsH = iBands(_Symbol, InpTimeframe, InpBandsPeriod, 0, 2.0, PRICE_CLOSE);
    if(InpUseAdx)   g_adxH   = iADX(_Symbol, InpTimeframe, InpAdxPeriod);
+   if(InpUseHtfTrend) g_htfH = iMA(_Symbol, InpHtfTimeframe, InpHtfMaPeriod, 0, MODE_EMA, PRICE_CLOSE);
 
    if((InpUseEma   && (g_emaFastH == INVALID_HANDLE || g_emaSlowH == INVALID_HANDLE)) ||
       (InpUseRsi   && g_rsiH   == INVALID_HANDLE) ||
       (InpUseMacd  && g_macdH  == INVALID_HANDLE) ||
       (InpUseStoch && g_stochH == INVALID_HANDLE) ||
       (InpUseBands && g_bandsH == INVALID_HANDLE) ||
-      (InpUseAdx   && g_adxH   == INVALID_HANDLE))
+      (InpUseAdx   && g_adxH   == INVALID_HANDLE) ||
+      (InpUseHtfTrend && g_htfH == INVALID_HANDLE))
      {
       Print("Failed to create one or more indicator handles.");
       return(INIT_FAILED);
@@ -166,6 +175,7 @@ void OnDeinit(const int reason)
    if(g_stochH   != INVALID_HANDLE) IndicatorRelease(g_stochH);
    if(g_bandsH   != INVALID_HANDLE) IndicatorRelease(g_bandsH);
    if(g_adxH     != INVALID_HANDLE) IndicatorRelease(g_adxH);
+   if(g_htfH     != INVALID_HANDLE) IndicatorRelease(g_htfH);
    Comment("");
   }
 
@@ -307,16 +317,30 @@ void EvaluateEntry()
       if(CopyBuffer(g_adxH, 0, 1, 1, adx)   < 1) return;
       if(CopyBuffer(g_adxH, 1, 1, 1, plus)  < 1) return;
       if(CopyBuffer(g_adxH, 2, 1, 1, minus) < 1) return;
+      //--- Hard gate: don't trade chop. No trend strength -> no trade.
+      if(InpAdxGate && adx[0] < InpAdxMin)
+         return;
       if(adx[0] >= InpAdxMin)
         {
          if(plus[0] > minus[0]) buyVotes++; else if(plus[0] < minus[0]) sellVotes++;
         }
      }
 
-   //--- Decide: the side with enough agreeing votes and a clear majority.
-   if(buyVotes >= InpMinConfirmations && buyVotes > sellVotes)
+   //--- Higher-timeframe trend gate: only allow trades WITH the HTF trend.
+   bool htfAllowsBuy = true, htfAllowsSell = true;
+   if(InpUseHtfTrend)
+     {
+      double htf[]; ArraySetAsSeries(htf, true);
+      if(CopyBuffer(g_htfH, 0, 0, 1, htf) < 1) return;
+      htfAllowsBuy  = (close > htf[0]);
+      htfAllowsSell = (close < htf[0]);
+     }
+
+   //--- Decide: the side with enough agreeing votes, a clear majority, and
+   //--- the higher-timeframe trend on its side.
+   if(buyVotes >= InpMinConfirmations && buyVotes > sellVotes && htfAllowsBuy)
       OpenTrade(ORDER_TYPE_BUY, buyVotes, sellVotes);
-   else if(sellVotes >= InpMinConfirmations && sellVotes > buyVotes)
+   else if(sellVotes >= InpMinConfirmations && sellVotes > buyVotes && htfAllowsSell)
       OpenTrade(ORDER_TYPE_SELL, sellVotes, buyVotes);
   }
 

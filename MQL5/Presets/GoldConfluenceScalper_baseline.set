@@ -1,5 +1,6 @@
-; GoldConfluenceScalper - baseline preset. Load in the Strategy Tester
-; (Inputs -> Load). 1-min, +$10 money target, no stop loss, 3 confirmations.
+; GoldConfluenceScalper - v2 baseline preset. Load in the Strategy Tester
+; (Inputs -> Load). 1-min, +$10 target, $20 stop, 3 confirmations,
+; HTF(H1) trend gate + ADX chop gate + London/NY session.
 InpTimeframe=1
 InpProfitTargetUSD=10.0
 InpStopLossUSD=20.0
@@ -18,15 +19,19 @@ InpBandsPeriod=20
 InpUseAdx=true
 InpAdxPeriod=14
 InpAdxMin=20.0
+InpAdxGate=true
+InpUseHtfTrend=true
+InpHtfTimeframe=16385
+InpHtfMaPeriod=200
 InpLots=0.10
 InpMaxPositions=1
 InpMinSecondsBetween=30
 InpMaxSpreadPoints=60
 InpDailyLossLimit=0.0
-InpUseSession=false
+InpUseSession=true
 InpSessionInUTC=false
 InpBrokerGmtOffset=3
-InpSessionStartHour=0
-InpSessionEndHour=23
+InpSessionStartHour=8
+InpSessionEndHour=21
 InpMagicNumber=20240606
 InpComment=GoldConfluenceScalper
