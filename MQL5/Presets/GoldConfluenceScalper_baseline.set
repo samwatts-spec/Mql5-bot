@@ -1,0 +1,31 @@
+; GoldConfluenceScalper - baseline preset. Load in the Strategy Tester
+; (Inputs -> Load). 1-min, +$10 money target, no stop loss, 3 confirmations.
+InpTimeframe=1
+InpProfitTargetUSD=10.0
+InpUseEmergencyStop=false
+InpEmergencyLossUSD=100.0
+InpMinConfirmations=3
+InpUseEma=true
+InpFastEmaPeriod=20
+InpSlowEmaPeriod=50
+InpUseRsi=true
+InpRsiPeriod=14
+InpUseMacd=true
+InpUseStoch=true
+InpUseBands=true
+InpBandsPeriod=20
+InpUseAdx=true
+InpAdxPeriod=14
+InpAdxMin=20.0
+InpLots=0.10
+InpMaxPositions=1
+InpMinSecondsBetween=30
+InpMaxSpreadPoints=60
+InpDailyLossLimit=0.0
+InpUseSession=false
+InpSessionInUTC=false
+InpBrokerGmtOffset=3
+InpSessionStartHour=0
+InpSessionEndHour=23
+InpMagicNumber=20240606
+InpComment=GoldConfluenceScalper
